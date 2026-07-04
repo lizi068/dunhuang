@@ -93,15 +93,46 @@
         .second-title { font-size: 1.2rem; letter-spacing: 0.3em; position: relative; }
         .second-title::before, .second-title::after { content: '❋'; font-size: 0.8rem; color: rgba(200,150,50,0.6); margin: 0 12px; vertical-align: middle; }
         .progress-bar { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; gap: 12px; }
-        .progress-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,200,80,0.3); border: 1px solid rgba(255,200,80,0.5); cursor: pointer; transition: all 0.3s ease; }
+        .progress-dot { 
+            width: 10px; height: 10px; border-radius: 50%; 
+            background: rgba(255,200,80,0.3); border: 1px solid rgba(255,200,80,0.5); 
+            cursor: pointer; transition: all 0.3s ease; 
+            padding: 8px;
+            background-clip: content-box;
+            box-sizing: content-box;
+        }
         .progress-dot.active { background: rgba(255,200,80,0.8); box-shadow: 0 0 10px rgba(255,200,80,0.6); transform: scale(1.2); }
 
         /* 全景漫游容器 */
-        .panorama-viewport { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; }
-        .panorama-track { position: absolute; top: 0; left: 0; height: 100%; display: flex; will-change: transform; }
-        .panorama-scene { position: relative; height: 100%; flex-shrink: 0; overflow: hidden; }
+        .panorama-viewport { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            overflow: hidden; 
+            touch-action: pan-x;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .panorama-track { 
+            position: absolute; top: 0; left: 0; height: 100%; 
+            display: flex; 
+            will-change: transform; 
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        .panorama-scene { 
+            position: relative; height: 100%; flex-shrink: 0; overflow: hidden; 
+            transition: opacity 0.6s ease;
+        }
         .panorama-scene .scene-bg-layer { position: absolute; top: 0; left: 0; height: 100%; will-change: transform; }
-        .panorama-scene .scene-bg-layer img { height: 100%; width: auto; max-width: none; display: block; filter: saturate(0.9) contrast(1.05); }
+        .panorama-scene .scene-bg-layer img { 
+            height: 100%; width: auto; max-width: none; display: block; 
+            filter: saturate(0.9) contrast(1.05);
+            pointer-events: none;
+            -webkit-user-drag: none;
+        }
 
         /* 视差层 */
         .parallax-far { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(180deg, #1a1008 0%, #2a1a0c 30%, #25160a 60%, #1a1008 100%); z-index: 1; }
@@ -115,7 +146,10 @@
         .scene-text { position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%); text-align: center; z-index: 15; }
         .scene-name { font-size: clamp(1.5rem,4vw,2.5rem); letter-spacing: 0.25em; margin-bottom: 8px; font-weight: normal; }
         .scene-desc { font-size: clamp(0.8rem,1.5vw,1rem); letter-spacing: 0.2em; color: rgba(220,190,140,0.8); }
-        .scene-hotspot { position: absolute; cursor: pointer; z-index: 20; }
+        .scene-hotspot { 
+            position: absolute; cursor: pointer; z-index: 20; 
+            min-width: 44px; min-height: 44px;
+        }
         .hotspot-pulse { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,200,80,0.5); background: radial-gradient(circle, rgba(255,200,80,0.15) 0%, transparent 60%); animation: hotspotPulse 2s ease-in-out infinite; }
         .hotspot-dot { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 8px; height: 8px; border-radius: 50%; background: rgba(255,215,0,0.9); box-shadow: 0 0 12px rgba(255,200,50,0.6), 0 0 24px rgba(255,180,30,0.3); }
         @keyframes hotspotPulse { 0%,100% { transform: translate(-50%,-50%) scale(1); opacity: 1; } 50% { transform: translate(-50%,-50%) scale(1.5); opacity: 0.5; } }
@@ -131,7 +165,7 @@
         @keyframes lineGrow { 0%,100% { height: 60px; opacity: 0.8; } 50% { height: 80px; opacity: 1; } }
 
         /* 场景切换过渡 */
-        .panorama-scene { transition: opacity 0.6s ease; }
+        
         .panorama-scene.active { opacity: 1; }
         .panorama-scene:not(.active) { opacity: 0.3; }
 
@@ -1674,17 +1708,23 @@
         // 注意：currentScene/isScrolling/totalScenes 已在全局变量区声明
         let touchStartX = 0;
         let touchStartY = 0;
-        let touchEndX = 0;
+        let touchStartTime = 0;
         let isDragging = false;
         let dragStartX = 0;
         let dragCurrentX = 0;
         let sceneOffsets = [0, 0, 0, 0]; // 每个场景内图片的偏移量
         let viewportWidth = 0;
         let sceneWidths = [];
-        let imgWidths = [];
+        let imgNaturalWidths = [];
+        let imgNaturalHeights = [];
         let panoramaTrack = null;
         let panoramaScenes = [];
         let bgLayers = [];
+        let velocityX = 0;
+        let lastTouchX = 0;
+        let lastTouchTime = 0;
+        let rafId = null;
+        let isAnimating = false;
 
         function initPanorama() {
             panoramaTrack = document.getElementById('panoramaTrack');
@@ -1692,52 +1732,96 @@
             bgLayers = document.querySelectorAll('.scene-bg-layer');
             viewportWidth = window.innerWidth;
 
-            // 计算每个场景的宽度（以视口宽度为基准，3:1图片则场景宽度 = 图片宽度）
+            // 先等待图片加载完成，获取真实尺寸
+            const loadPromises = [];
             panoramaScenes.forEach((scene, index) => {
                 const img = scene.querySelector('.scene-bg-layer img');
                 if (img) {
-                    // 设置场景宽度为图片原始宽度（按比例）
-                    const imgRatio = 3; // 3:1 长图
-                    const sceneWidth = viewportWidth * imgRatio;
-                    scene.style.width = sceneWidth + 'px';
-                    sceneWidths[index] = sceneWidth;
-                    imgWidths[index] = sceneWidth;
+                    const promise = new Promise((resolve) => {
+                        if (img.complete && img.naturalWidth > 0) {
+                            resolve({ index, width: img.naturalWidth, height: img.naturalHeight });
+                        } else {
+                            img.onload = () => resolve({ index, width: img.naturalWidth, height: img.naturalHeight });
+                            img.onerror = () => resolve({ index, width: viewportWidth * 3, height: viewportWidth });
+                            // 超时保护
+                            setTimeout(() => resolve({ index, width: viewportWidth * 3, height: viewportWidth }), 3000);
+                        }
+                    });
+                    loadPromises.push(promise);
                 } else {
-                    scene.style.width = viewportWidth + 'px';
-                    sceneWidths[index] = viewportWidth;
-                    imgWidths[index] = viewportWidth;
+                    loadPromises.push(Promise.resolve({ index, width: viewportWidth * 3, height: viewportWidth }));
                 }
-
-                // 初始化偏移
-                sceneOffsets[index] = 0;
             });
 
-            // 设置track总宽度
-            updateTrackWidth();
+            Promise.all(loadPromises).then(results => {
+                results.forEach(({ index, width, height }) => {
+                    imgNaturalWidths[index] = width;
+                    imgNaturalHeights[index] = height;
 
-            // 激活第一个场景
-            updateSceneActiveState();
+                    // 根据图片实际比例计算场景宽度
+                    // 图片高度固定为视口高度，宽度按比例缩放
+                    const scale = window.innerHeight / height;
+                    const scaledWidth = width * scale;
+                    sceneWidths[index] = Math.max(viewportWidth, scaledWidth);
 
-            // 绑定事件
+                    const scene = panoramaScenes[index];
+                    scene.style.width = sceneWidths[index] + 'px';
+
+                    // 设置图片样式
+                    const img = scene.querySelector('.scene-bg-layer img');
+                    if (img) {
+                        img.style.width = sceneWidths[index] + 'px';
+                        img.style.height = '100%';
+                        img.style.maxWidth = 'none';
+                    }
+                });
+
+                updateTrackWidth();
+                updateSceneActiveState();
+                applyTransform(true);
+                showDragHint(0);
+            });
+
+            // 绑定事件 - 使用passive:false确保可以preventDefault
             const viewport = document.getElementById('panoramaViewport');
-            viewport.addEventListener('touchstart', handlePanoramaTouchStart, { passive: false });
-            viewport.addEventListener('touchmove', handlePanoramaTouchMove, { passive: false });
-            viewport.addEventListener('touchend', handlePanoramaTouchEnd, { passive: true });
-            viewport.addEventListener('mousedown', handlePanoramaMouseDown);
+
+            // 移除旧事件监听器（如果有）
+            const newViewport = viewport.cloneNode(true);
+            viewport.parentNode.replaceChild(newViewport, viewport);
+
+            // 重新获取引用
+            const viewportEl = document.getElementById('panoramaViewport');
+
+            viewportEl.addEventListener('touchstart', handlePanoramaTouchStart, { passive: false });
+            viewportEl.addEventListener('touchmove', handlePanoramaTouchMove, { passive: false });
+            viewportEl.addEventListener('touchend', handlePanoramaTouchEnd, { passive: false });
+            viewportEl.addEventListener('touchcancel', handlePanoramaTouchCancel, { passive: false });
+
+            // 鼠标事件
+            viewportEl.addEventListener('mousedown', handlePanoramaMouseDown);
+
+            // 全局事件
             window.addEventListener('mousemove', handlePanoramaMouseMove);
             window.addEventListener('mouseup', handlePanoramaMouseUp);
             window.addEventListener('wheel', handlePanoramaWheel, { passive: false });
             window.addEventListener('keydown', handlePanoramaKeydown);
-            window.addEventListener('resize', handlePanoramaResize);
 
-            // 显示第一个场景的拖拽提示
-            showDragHint(0);
+            // 窗口大小变化
+            window.addEventListener('resize', debounce(handlePanoramaResize, 250));
+        }
+
+        function debounce(fn, delay) {
+            let timer = null;
+            return function(...args) {
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), delay);
+            };
         }
 
         function updateTrackWidth() {
             let totalWidth = 0;
             panoramaScenes.forEach((scene, i) => {
-                totalWidth += sceneWidths[i];
+                totalWidth += sceneWidths[i] || viewportWidth;
             });
             panoramaTrack.style.width = totalWidth + 'px';
         }
@@ -1752,7 +1836,6 @@
             document.querySelectorAll('.scene-drag-hint').forEach((hint, i) => {
                 hint.classList.toggle('show', i === sceneIndex);
             });
-            // 3秒后自动隐藏
             setTimeout(() => {
                 const hint = document.getElementById('dragHint' + sceneIndex);
                 if (hint) hint.classList.remove('show');
@@ -1762,109 +1845,183 @@
         function getTrackOffset() {
             let offset = 0;
             for (let i = 0; i < currentScene; i++) {
-                offset += sceneWidths[i];
+                offset += sceneWidths[i] || viewportWidth;
             }
             return offset;
         }
 
         function getMaxOffset(sceneIndex) {
-            const imgW = imgWidths[sceneIndex] || viewportWidth;
-            return Math.max(0, imgW - viewportWidth);
+            const sw = sceneWidths[sceneIndex] || viewportWidth;
+            return Math.max(0, sw - viewportWidth);
         }
 
-        function applyTransform() {
+        function applyTransform(immediate) {
             const trackOffset = getTrackOffset();
             const currentOffset = sceneOffsets[currentScene] || 0;
             const totalOffset = -(trackOffset + currentOffset);
-            panoramaTrack.style.transform = `translateX(${totalOffset}px)`;
-            panoramaTrack.style.transition = isDragging ? 'none' : 'transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+
+            if (immediate) {
+                panoramaTrack.style.transition = 'none';
+            } else {
+                panoramaTrack.style.transition = 'transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+            }
+            panoramaTrack.style.transform = `translate3d(${totalOffset}px, 0, 0)`;
         }
 
-        // ===== 触摸事件 =====
+        // ===== 触摸事件 - 重写为更可靠的版本 =====
         function handlePanoramaTouchStart(e) {
             if (!document.getElementById('scene-second').classList.contains('active')) return;
+            if (e.touches.length !== 1) return;
+
             const touch = e.touches[0];
             touchStartX = touch.clientX;
             touchStartY = touch.clientY;
+            touchStartTime = Date.now();
+            lastTouchX = touch.clientX;
+            lastTouchTime = touchStartTime;
             dragStartX = touchStartX;
             isDragging = true;
+            velocityX = 0;
 
-            // 暂停过渡动画，直接跟随手指
+            // 立即停止任何正在进行的动画
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            isAnimating = false;
+
             panoramaTrack.style.transition = 'none';
         }
 
         function handlePanoramaTouchMove(e) {
-            if (!document.getElementById('scene-second').classList.contains('active')) return;
             if (!isDragging) return;
-            e.preventDefault();
+            if (e.touches.length !== 1) return;
 
             const touch = e.touches[0];
-            const deltaX = touch.clientX - dragStartX;
-            const deltaY = touch.clientY - touchStartY;
+            const currentX = touch.clientX;
+            const currentY = touch.clientY;
+            const currentTime = Date.now();
 
-            // 判断是水平滑动还是垂直滑动
-            if (Math.abs(deltaX) > Math.abs(deltaY) * 0.5) {
-                e.preventDefault();
+            // 计算移动距离
+            const deltaX = currentX - touchStartX;
+            const deltaY = currentY - touchStartY;
+
+            // 判断滑动方向 - 如果是垂直滑动为主，不阻止默认行为
+            if (Math.abs(deltaY) > Math.abs(deltaX) * 1.2 && Math.abs(deltaY) > 10) {
+                // 垂直滑动，允许页面滚动
+                isDragging = false;
+                return;
             }
 
-            dragCurrentX = deltaX;
+            // 水平滑动，阻止默认行为
+            e.preventDefault();
 
+            // 计算速度
+            const dt = currentTime - lastTouchTime;
+            if (dt > 0) {
+                velocityX = (currentX - lastTouchX) / dt;
+            }
+            lastTouchX = currentX;
+            lastTouchTime = currentTime;
+
+            // 计算新的偏移
             const currentOffset = sceneOffsets[currentScene] || 0;
-            const newOffset = currentOffset - deltaX; // 手指向左滑，图片向右移（显示右侧）
             const maxOffset = getMaxOffset(currentScene);
 
-            // 边界限制 + 弹性
-            let boundedOffset = newOffset;
-            if (boundedOffset < 0) boundedOffset = deltaX * 0.3; // 左边界弹性
-            if (boundedOffset > maxOffset) boundedOffset = maxOffset + (newOffset - maxOffset) * 0.3; // 右边界弹性
+            // 手指向左滑(deltaX < 0)，图片应该向右移动，显示右侧内容
+            // 所以偏移量应该增加
+            let newOffset = currentOffset - (currentX - dragStartX);
 
-            // 计算场景切换的阈值判断
+            // 边界限制 + 弹性效果
+            let boundedOffset = newOffset;
+            const resistance = 0.4;
+
+            if (boundedOffset < 0) {
+                boundedOffset = newOffset * resistance;
+            } else if (boundedOffset > maxOffset) {
+                boundedOffset = maxOffset + (newOffset - maxOffset) * resistance;
+            }
+
+            // 实时更新显示
             const trackOffset = getTrackOffset();
             const totalOffset = -(trackOffset + boundedOffset);
-            panoramaTrack.style.transform = `translateX(${totalOffset}px)`;
+            panoramaTrack.style.transform = `translate3d(${totalOffset}px, 0, 0)`;
         }
 
         function handlePanoramaTouchEnd(e) {
-            if (!document.getElementById('scene-second').classList.contains('active')) return;
             if (!isDragging) return;
             isDragging = false;
 
             const touch = e.changedTouches[0];
-            touchEndX = touch.clientX;
-            const totalDeltaX = touchStartX - touchEndX; // 正值表示向左滑
-            const totalDeltaY = touch.clientY - touchStartY;
+            const endX = touch.clientX;
+            const endTime = Date.now();
 
-            // 判断是场景内拖拽还是场景切换
+            const totalDeltaX = touchStartX - endX; // 正值=向左滑
+            const totalDeltaY = touchStartY - endY;
+            const duration = endTime - touchStartTime;
+
             const currentOffset = sceneOffsets[currentScene] || 0;
             const maxOffset = getMaxOffset(currentScene);
 
-            // 如果水平滑动距离大，且图片已经拖到边界，则切换场景
-            if (Math.abs(totalDeltaX) > 80 && Math.abs(totalDeltaX) > Math.abs(totalDeltaY)) {
-                if (totalDeltaX > 0 && currentOffset >= maxOffset - 10) {
-                    // 向左滑，且图片已拖到最右（或接近），切到下一场景
-                    if (currentScene < totalScenes - 1) {
-                        nextScene();
-                        return;
-                    }
-                } else if (totalDeltaX < 0 && currentOffset <= 10) {
-                    // 向右滑，且图片已拖到最左，切到上一场景
-                    if (currentScene > 0) {
-                        prevScene();
-                        return;
-                    }
+            // 判断是快速滑动还是慢速拖动
+            const isQuickSwipe = duration < 300 && Math.abs(totalDeltaX) > 30;
+            const isSlowDrag = duration >= 300;
+
+            // 场景切换判断
+            let shouldSwitchScene = false;
+            let switchDirection = 0; // -1=左(上一场景), 1=右(下一场景)
+
+            if (isQuickSwipe) {
+                // 快速滑动：根据方向直接切换场景
+                if (totalDeltaX > 30 && currentScene < totalScenes - 1) {
+                    shouldSwitchScene = true;
+                    switchDirection = 1;
+                } else if (totalDeltaX < -30 && currentScene > 0) {
+                    shouldSwitchScene = true;
+                    switchDirection = -1;
+                }
+            } else {
+                // 慢速拖动：根据是否到达边界判断
+                if (totalDeltaX > 80 && currentOffset >= maxOffset - 20 && currentScene < totalScenes - 1) {
+                    shouldSwitchScene = true;
+                    switchDirection = 1;
+                } else if (totalDeltaX < -80 && currentOffset <= 20 && currentScene > 0) {
+                    shouldSwitchScene = true;
+                    switchDirection = -1;
                 }
             }
 
-            // 场景内：弹性回弹到有效范围
-            let finalOffset = currentOffset;
-            const dragOffset = currentOffset - totalDeltaX;
+            if (shouldSwitchScene) {
+                if (switchDirection === 1) {
+                    nextScene();
+                } else {
+                    prevScene();
+                }
+                return;
+            }
 
-            if (dragOffset < 0) finalOffset = 0;
-            else if (dragOffset > maxOffset) finalOffset = maxOffset;
-            else finalOffset = dragOffset;
+            // 场景内：计算最终位置（带惯性）
+            let finalOffset = currentOffset - totalDeltaX;
+
+            // 应用惯性
+            if (Math.abs(velocityX) > 0.5) {
+                const inertiaDistance = velocityX * 200; // 惯性距离
+                finalOffset += inertiaDistance;
+            }
+
+            // 边界限制
+            if (finalOffset < 0) finalOffset = 0;
+            else if (finalOffset > maxOffset) finalOffset = maxOffset;
 
             sceneOffsets[currentScene] = finalOffset;
-            applyTransform();
+            applyTransform(false);
+        }
+
+        function handlePanoramaTouchCancel(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            // 回到当前有效位置
+            applyTransform(false);
         }
 
         // ===== 鼠标事件（桌面端） =====
@@ -1883,20 +2040,21 @@
 
         function handlePanoramaMouseMove(e) {
             if (!isMouseDown || !document.getElementById('scene-second').classList.contains('active')) return;
-            const deltaX = e.clientX - dragStartX;
-            dragCurrentX = deltaX;
 
+            const deltaX = e.clientX - dragStartX;
             const currentOffset = sceneOffsets[currentScene] || 0;
-            const newOffset = currentOffset - deltaX;
             const maxOffset = getMaxOffset(currentScene);
 
+            let newOffset = currentOffset - deltaX;
             let boundedOffset = newOffset;
-            if (boundedOffset < 0) boundedOffset = deltaX * 0.3;
-            if (boundedOffset > maxOffset) boundedOffset = maxOffset + (newOffset - maxOffset) * 0.3;
+            const resistance = 0.4;
+
+            if (boundedOffset < 0) boundedOffset = newOffset * resistance;
+            if (boundedOffset > maxOffset) boundedOffset = maxOffset + (newOffset - maxOffset) * resistance;
 
             const trackOffset = getTrackOffset();
             const totalOffset = -(trackOffset + boundedOffset);
-            panoramaTrack.style.transform = `translateX(${totalOffset}px)`;
+            panoramaTrack.style.transform = `translate3d(${totalOffset}px, 0, 0)`;
         }
 
         function handlePanoramaMouseUp(e) {
@@ -1908,29 +2066,22 @@
             const currentOffset = sceneOffsets[currentScene] || 0;
             const maxOffset = getMaxOffset(currentScene);
 
-            // 场景切换判断
             if (Math.abs(totalDeltaX) > 80) {
-                if (totalDeltaX > 0 && currentOffset >= maxOffset - 10) {
-                    if (currentScene < totalScenes - 1) {
-                        nextScene();
-                        return;
-                    }
-                } else if (totalDeltaX < 0 && currentOffset <= 10) {
-                    if (currentScene > 0) {
-                        prevScene();
-                        return;
-                    }
+                if (totalDeltaX > 0 && currentOffset >= maxOffset - 20 && currentScene < totalScenes - 1) {
+                    nextScene();
+                    return;
+                } else if (totalDeltaX < 0 && currentOffset <= 20 && currentScene > 0) {
+                    prevScene();
+                    return;
                 }
             }
 
-            let finalOffset = currentOffset;
-            const dragOffset = currentOffset - totalDeltaX;
-            if (dragOffset < 0) finalOffset = 0;
-            else if (dragOffset > maxOffset) finalOffset = maxOffset;
-            else finalOffset = dragOffset;
+            let finalOffset = currentOffset - totalDeltaX;
+            if (finalOffset < 0) finalOffset = 0;
+            else if (finalOffset > maxOffset) finalOffset = maxOffset;
 
             sceneOffsets[currentScene] = finalOffset;
-            applyTransform();
+            applyTransform(false);
         }
 
         // ===== 滚轮事件 =====
@@ -1946,14 +2097,11 @@
 
             if (wheelTimeout) clearTimeout(wheelTimeout);
 
-            // 实时滚动效果
             const currentOffset = sceneOffsets[currentScene] || 0;
             const maxOffset = getMaxOffset(currentScene);
             let newOffset = currentOffset + wheelAccumulated * 0.5;
 
-            // 边界检查
             if (newOffset < 0) {
-                // 已经到左边界，继续向左滚则切到上一场景
                 if (wheelAccumulated < -100 && currentScene > 0) {
                     wheelAccumulated = 0;
                     prevScene();
@@ -1961,7 +2109,6 @@
                 }
                 newOffset = 0;
             } else if (newOffset > maxOffset) {
-                // 已经到右边界，继续向右滚则切到下一场景
                 if (wheelAccumulated > 100 && currentScene < totalScenes - 1) {
                     wheelAccumulated = 0;
                     nextScene();
@@ -1971,7 +2118,7 @@
             }
 
             sceneOffsets[currentScene] = newOffset;
-            applyTransform();
+            applyTransform(true);
 
             wheelTimeout = setTimeout(() => {
                 wheelAccumulated = 0;
@@ -1985,13 +2132,13 @@
 
             const currentOffset = sceneOffsets[currentScene] || 0;
             const maxOffset = getMaxOffset(currentScene);
-            const step = viewportWidth * 0.15;
+            const step = viewportWidth * 0.2;
 
             if (e.key === 'ArrowRight' || e.key === ' ') {
                 e.preventDefault();
                 if (currentOffset < maxOffset) {
                     sceneOffsets[currentScene] = Math.min(maxOffset, currentOffset + step);
-                    applyTransform();
+                    applyTransform(false);
                 } else if (currentScene < totalScenes - 1) {
                     nextScene();
                 }
@@ -1999,7 +2146,7 @@
                 e.preventDefault();
                 if (currentOffset > 0) {
                     sceneOffsets[currentScene] = Math.max(0, currentOffset - step);
-                    applyTransform();
+                    applyTransform(false);
                 } else if (currentScene > 0) {
                     prevScene();
                 }
@@ -2009,24 +2156,28 @@
         // ===== 窗口大小变化 =====
         function handlePanoramaResize() {
             viewportWidth = window.innerWidth;
+
             panoramaScenes.forEach((scene, index) => {
                 const img = scene.querySelector('.scene-bg-layer img');
-                if (img) {
-                    const imgRatio = 3;
-                    const sceneWidth = viewportWidth * imgRatio;
-                    scene.style.width = sceneWidth + 'px';
-                    sceneWidths[index] = sceneWidth;
-                    imgWidths[index] = sceneWidth;
+                if (img && imgNaturalHeights[index] > 0) {
+                    const scale = window.innerHeight / imgNaturalHeights[index];
+                    const scaledWidth = imgNaturalWidths[index] * scale;
+                    sceneWidths[index] = Math.max(viewportWidth, scaledWidth);
+                    scene.style.width = sceneWidths[index] + 'px';
+                    img.style.width = sceneWidths[index] + 'px';
+                } else {
+                    sceneWidths[index] = viewportWidth * 3;
+                    scene.style.width = sceneWidths[index] + 'px';
                 }
             });
+
             updateTrackWidth();
 
-            // 重新约束当前偏移
             const maxOffset = getMaxOffset(currentScene);
             if (sceneOffsets[currentScene] > maxOffset) {
                 sceneOffsets[currentScene] = maxOffset;
             }
-            applyTransform();
+            applyTransform(false);
         }
 
         // ===== 场景切换 =====
@@ -2054,7 +2205,10 @@
         function updateScenePosition() {
             isScrolling = true;
             updateSceneActiveState();
-            applyTransform();
+
+            // 重置新场景的偏移为0（从左侧开始显示）
+            sceneOffsets[currentScene] = 0;
+            applyTransform(false);
 
             // 更新进度点
             document.querySelectorAll('.progress-dot').forEach((dot, index) => {
