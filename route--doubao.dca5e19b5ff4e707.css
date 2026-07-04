@@ -1,0 +1,2 @@
+.hairline-b{position:relative}.hairline-b:after{background:var(--line-divider-default);content:"";pointer-events:none;transform-origin:bottom;height:1px;position:absolute;bottom:0;left:0;right:0;transform:scaleY(.5)}.hairline-t{position:relative}.hairline-t:after{background:var(--line-divider-default);content:"";pointer-events:none;transform-origin:top;height:1px;position:absolute;top:0;left:0;right:0;transform:scaleY(.5)}
+/*# sourceMappingURL=route--doubao.dca5e19b5ff4e707.css.map*/
